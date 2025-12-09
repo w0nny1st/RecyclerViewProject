@@ -10,7 +10,8 @@ import com.example.recyclerviewproject.model.ListItem
 
 class MultiTypeAdapter(
     private val items: MutableList<ListItem>,
-    private val onItemClick: (ListItem) -> Unit
+    private val onItemClick: (ListItem) -> Unit,
+    private val onItemLongClick: (ListItem) -> Unit = {}
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     companion object {
@@ -26,10 +27,29 @@ class MultiTypeAdapter(
         notifyItemInserted(items.size - 1)
     }
 
+    fun removeItem(position: Int) {
+        if (position in 0 until items.size) {
+            items.removeAt(position)
+            notifyItemRemoved(position)
+        }
+    }
+
+    fun moveItem(fromPosition: Int, toPosition: Int) {
+        if (fromPosition in 0 until items.size && toPosition in 0 until items.size && fromPosition != toPosition) {
+            val item = items.removeAt(fromPosition)
+            items.add(toPosition, item)
+            notifyItemMoved(fromPosition, toPosition)
+        }
+    }
+
     fun updateItems(newItems: List<ListItem>) {
         items.clear()
         items.addAll(newItems)
         notifyDataSetChanged()
+    }
+
+    fun getItemAt(position: Int): ListItem? {
+        return items.getOrNull(position)
     }
 
     override fun getItemViewType(position: Int): Int {
@@ -61,16 +81,26 @@ class MultiTypeAdapter(
     }
 
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
-        when (val item = items[position]) {
+        val item = items[position]
+
+        when (item) {
             is ListItem.Header -> (holder as HeaderViewHolder).bind(item)
             is ListItem.ItemType1 -> (holder as ItemType1ViewHolder).bind(item)
             is ListItem.ItemType2 -> (holder as ItemType2ViewHolder).bind(item)
         }
 
         holder.itemView.setOnClickListener {
-            onItemClick(items[position])
+            onItemClick(item)
+        }
+
+        holder.itemView.setOnLongClickListener {
+            onItemLongClick(item)
+            true
         }
     }
+
+
+
 
     override fun getItemCount() = items.size
 
