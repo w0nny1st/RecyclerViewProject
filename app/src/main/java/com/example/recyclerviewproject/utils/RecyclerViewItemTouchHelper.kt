@@ -5,7 +5,7 @@ import android.graphics.Color
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.RecyclerView
 import com.example.recyclerviewproject.R
-import com.example.recyclerviewproject.ui.adapter.MultiTypeAdapter
+import com.example.recyclerviewproject.adapter.MultiTypeAdapter
 import it.xabaras.android.recyclerview.swipedecorator.RecyclerViewSwipeDecorator
 
 class RecyclerViewItemTouchHelper(

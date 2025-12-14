@@ -1,4 +1,4 @@
-package com.example.recyclerviewproject.ui.adapter
+package com.example.recyclerviewproject.adapter
 
 import android.view.LayoutInflater
 import android.view.ViewGroup
@@ -9,7 +9,6 @@ import com.example.recyclerviewproject.databinding.ItemType2Binding
 import com.example.recyclerviewproject.model.ListItem
 
 class MultiTypeAdapter(
-    private val items: MutableList<ListItem>,
     private val onItemClick: (ListItem) -> Unit,
     private val onItemLongClick: (ListItem) -> Unit = {}
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
@@ -20,36 +19,19 @@ class MultiTypeAdapter(
         private const val TYPE_ITEM_2 = 2
     }
 
-    fun getItems(): List<ListItem> = items
+    private var items: List<ListItem> = emptyList()
 
-    fun addItem(item: ListItem) {
-        items.add(item)
-        notifyItemInserted(items.size - 1)
-    }
-
-    fun removeItem(position: Int) {
-        if (position in 0 until items.size) {
-            items.removeAt(position)
-            notifyItemRemoved(position)
-        }
-    }
-
-    fun moveItem(fromPosition: Int, toPosition: Int) {
-        if (fromPosition in 0 until items.size && toPosition in 0 until items.size && fromPosition != toPosition) {
-            val item = items.removeAt(fromPosition)
-            items.add(toPosition, item)
-            notifyItemMoved(fromPosition, toPosition)
-        }
-    }
-
-    fun updateItems(newItems: List<ListItem>) {
-        items.clear()
-        items.addAll(newItems)
+    fun submitList(newItems: List<ListItem>) {
+        items = newItems
         notifyDataSetChanged()
     }
 
     fun getItemAt(position: Int): ListItem? {
         return items.getOrNull(position)
+    }
+
+    fun findPosition(item: ListItem): Int {
+        return items.indexOf(item)
     }
 
     override fun getItemViewType(position: Int): Int {
@@ -98,9 +80,6 @@ class MultiTypeAdapter(
             true
         }
     }
-
-
-
 
     override fun getItemCount() = items.size
 

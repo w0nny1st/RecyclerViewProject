@@ -1,4 +1,4 @@
-package com.example.recyclerviewproject.ui
+package com.example.recyclerviewproject.view
 
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
@@ -9,13 +9,16 @@ import android.view.ViewGroup
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.viewModels
+import androidx.lifecycle.Observer
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.recyclerviewproject.R
+import com.example.recyclerviewproject.adapter.MultiTypeAdapter
 import com.example.recyclerviewproject.databinding.FragmentListBinding
 import com.example.recyclerviewproject.model.ListItem
-import com.example.recyclerviewproject.ui.adapter.MultiTypeAdapter
 import com.example.recyclerviewproject.utils.RecyclerViewItemTouchHelper
+import com.example.recyclerviewproject.viewmodel.ListViewModel
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
 
@@ -24,9 +27,8 @@ class ListFragment : Fragment() {
     private var _binding: FragmentListBinding? = null
     private val binding get() = _binding!!
 
+    private val viewModel: ListViewModel by viewModels()
     private lateinit var adapter: MultiTypeAdapter
-    private var itemCounter = 0
-    private var deletedItem: Pair<Int, ListItem>? = null
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -42,14 +44,12 @@ class ListFragment : Fragment() {
 
         setupRecyclerView()
         setupFab()
+        setupObservers()
         setupSwipeAndDrag()
     }
 
     private fun setupRecyclerView() {
-        val items = generateItems().toMutableList()
-
         adapter = MultiTypeAdapter(
-            items,
             onItemClick = { item ->
                 showItemInfo(item)
             },
@@ -95,44 +95,38 @@ class ListFragment : Fragment() {
         }
     }
 
+    private fun setupObservers() {
+        viewModel.items.observe(viewLifecycleOwner, Observer { items ->
+            adapter.submitList(items)
+        })
+
+        viewModel.toastMessage.observe(viewLifecycleOwner, Observer { message ->
+            if (message.isNotEmpty()) {
+                Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show()
+                viewModel.clearToastMessage()
+            }
+        })
+
+        viewModel.showUndoSnackbar.observe(viewLifecycleOwner, Observer { deletedItem ->
+            if (deletedItem != null) {
+                showUndoSnackbar(deletedItem)
+            }
+        })
+    }
+
     private fun setupSwipeAndDrag() {
         val touchHelper = RecyclerViewItemTouchHelper(
             adapter = adapter,
             onItemDeleted = { position, item ->
-                deletedItem = Pair(position, item)
-                adapter.removeItem(position)
-                showUndoSnackbar()
+                viewModel.removeItem(position)
             },
             onItemMoved = { fromPosition, toPosition ->
-                adapter.moveItem(fromPosition, toPosition)
-                Toast.makeText(
-                    requireContext(),
-                    "Элемент перемещен",
-                    Toast.LENGTH_SHORT
-                ).show()
+                viewModel.moveItem(fromPosition, toPosition)
             }
         )
 
         val itemTouchHelper = ItemTouchHelper(touchHelper)
         itemTouchHelper.attachToRecyclerView(binding.recyclerView)
-    }
-
-    private fun generateItems(): List<ListItem> {
-        return listOf(
-            ListItem.Header("Заголовок раздела 1"),
-            ListItem.ItemType1(1, "Первый элемент", "Описание первого элемента", android.R.drawable.ic_dialog_email),
-            ListItem.ItemType1(2, "Второй элемент", "Описание второго элемента", android.R.drawable.ic_dialog_info),
-            ListItem.ItemType1(3, "Третий элемент", "Описание третьего элемента", android.R.drawable.ic_dialog_map),
-
-            ListItem.Header("Заголовок раздела 2 - Товары"),
-            ListItem.ItemType2(4, "Смартфон", "4999 ₽", 4.5f, android.R.drawable.ic_dialog_alert),
-            ListItem.ItemType2(5, "Ноутбук", "8999 ₽", 4.8f, android.R.drawable.ic_dialog_dialer),
-            ListItem.ItemType2(6, "Наушники", "1999 ₽", 4.2f, android.R.drawable.ic_dialog_email),
-
-            ListItem.Header("Заголовок раздела 3"),
-            ListItem.ItemType1(7, "Четвертый элемент", "Описание четвертого элемента", android.R.drawable.ic_dialog_info),
-            ListItem.ItemType2(8, "Планшет", "6999 ₽", 4.7f, android.R.drawable.ic_dialog_map)
-        )
     }
 
     private fun showAddItemDialog() {
@@ -141,32 +135,12 @@ class ListFragment : Fragment() {
         MaterialAlertDialogBuilder(requireContext())
             .setTitle("Добавить новый элемент")
             .setItems(types) { _, which ->
-                itemCounter++
+                viewModel.addItem(which)
 
-                val newItem = when (which) {
-                    0 -> ListItem.ItemType1(
-                        id = 100 + itemCounter,
-                        title = "Новый элемент $itemCounter",
-                        description = "Добавлен через диалог",
-                        iconRes = android.R.drawable.ic_input_add
-                    )
-                    else -> ListItem.ItemType2(
-                        id = 200 + itemCounter,
-                        name = "Новый товар $itemCounter",
-                        price = "${itemCounter * 1000} ₽",
-                        rating = 4.0f,
-                        imageRes = android.R.drawable.ic_input_get
-                    )
+                val currentItems = adapter.itemCount
+                if (currentItems > 0) {
+                    binding.recyclerView.smoothScrollToPosition(currentItems - 1)
                 }
-
-                adapter.addItem(newItem)
-                binding.recyclerView.smoothScrollToPosition(adapter.itemCount - 1)
-
-                Toast.makeText(
-                    requireContext(),
-                    "Добавлен новый элемент типа ${which + 1}",
-                    Toast.LENGTH_SHORT
-                ).show()
             }
             .setNegativeButton("Отмена", null)
             .show()
@@ -193,27 +167,21 @@ class ListFragment : Fragment() {
             .setTitle("Действия")
             .setItems(options) { _, which ->
                 when (which) {
-                    0 -> {
-                        showEditDialog(item)
-                    }
+                    0 -> showEditDialog(item)
                     1 -> {
-                        val position = adapter.getItems().indexOfFirst { it == item }
+                        val position = adapter.findPosition(item)
                         if (position != -1) {
-                            deletedItem = Pair(position, item)
-                            adapter.removeItem(position)
-                            showUndoSnackbar()
+                            viewModel.removeItem(position)
                         }
                     }
                     2 -> {
                         if (item is ListItem.ItemType2) {
                             Toast.makeText(requireContext(), "Добавлено в избранное", Toast.LENGTH_SHORT).show()
                         } else {
-                            duplicateItem(item)
+                            viewModel.duplicateItem(item)
                         }
                     }
-                    3 -> {
-                        duplicateItem(item)
-                    }
+                    3 -> viewModel.duplicateItem(item)
                 }
             }
             .setNegativeButton("Отмена", null)
@@ -239,48 +207,23 @@ class ListFragment : Fragment() {
         }
     }
 
-    private fun duplicateItem(item: ListItem) {
-        itemCounter++
-
-        val duplicatedItem = when (item) {
-            is ListItem.ItemType1 -> item.copy(
-                id = item.id + 1000,
-                title = "${item.title} (копия)"
-            )
-            is ListItem.ItemType2 -> item.copy(
-                id = item.id + 1000,
-                name = "${item.name} (копия)"
-            )
-            else -> return
-        }
-
-        adapter.addItem(duplicatedItem)
-        binding.recyclerView.smoothScrollToPosition(adapter.itemCount - 1)
-
-        Toast.makeText(requireContext(), "Элемент дублирован", Toast.LENGTH_SHORT).show()
-    }
-
-    private fun showUndoSnackbar() {
+    private fun showUndoSnackbar(deletedItem: Pair<Int, ListItem>) {
         val snackbar = Snackbar.make(
             binding.root,
             "Элемент удален",
             Snackbar.LENGTH_LONG
         )
             .setAction("ОТМЕНИТЬ") {
-                deletedItem?.let { (position, item) ->
-                    val currentItems = adapter.getItems().toMutableList()
-                    currentItems.add(position, item)
-                    adapter.updateItems(currentItems)
-                    Toast.makeText(requireContext(), "Удаление отменено", Toast.LENGTH_SHORT).show()
-                }
-                deletedItem = null
+                viewModel.undoDelete()
             }
             .setActionTextColor(Color.YELLOW)
 
         snackbar.addCallback(object : Snackbar.Callback() {
             override fun onDismissed(transientBottomBar: Snackbar?, event: Int) {
                 super.onDismissed(transientBottomBar, event)
-                deletedItem = null
+                if (event != DISMISS_EVENT_ACTION) {
+                    viewModel.clearSnackbar()
+                }
             }
         })
 
